@@ -1,10 +1,12 @@
-import os,sys
+import os,sys, posixpath
 import numpy as np
 import cv2
 from PIL import Image
 from multiprocessing import Pool
 import argparse
 from IPython import embed #to debug
+import skvideo
+skvideo.setFFmpegPath('D:\\ffmpeg\\bin')
 import skvideo.io
 import scipy.misc
 
@@ -37,16 +39,16 @@ def save_flows(flows,image,save_dir,num,bound):
     #rescale to 0~255 with the bound setting
     flow_x=ToImg(flows[...,0],bound)
     flow_y=ToImg(flows[...,1],bound)
-    if not os.path.exists(os.path.join(data_root,new_dir,save_dir)):
-        os.makedirs(os.path.join(data_root,new_dir,save_dir))
+    if not os.path.exists(posixpath.join(data_root,new_dir,save_dir)):
+        os.makedirs(posixpath.join(data_root,new_dir,save_dir))
 
     #save the image
-    save_img=os.path.join(data_root,new_dir,save_dir,'img_{:05d}.jpg'.format(num))
+    save_img=posixpath.join(data_root,new_dir,save_dir,'img_{:05d}.jpg'.format(num))
     scipy.misc.imsave(save_img,image)
 
     #save the flows
-    save_x=os.path.join(data_root,new_dir,save_dir,'flow_x_{:05d}.jpg'.format(num))
-    save_y=os.path.join(data_root,new_dir,save_dir,'flow_y_{:05d}.jpg'.format(num))
+    save_x=posixpath.join(data_root,new_dir,save_dir,'flow_x_{:05d}.jpg'.format(num))
+    save_y=posixpath.join(data_root,new_dir,save_dir,'flow_y_{:05d}.jpg'.format(num))
     flow_x_img=Image.fromarray(flow_x)
     flow_y_img=Image.fromarray(flow_y)
     scipy.misc.imsave(save_x,flow_x_img)
@@ -63,8 +65,8 @@ def dense_flow(augs):
         bound: bi-bound parameter
     :return: no returns
     '''
-    video_name,save_dir,step,bound=augs
-    video_path=os.path.join(videos_root,video_name.split('_')[1],video_name)
+    video_path,save_dir,step,bound=augs
+    video_name = video_path.split("/")[-1]
 
     # provide two video-read methods: cv2.VideoCapture() and skvideo.io.vread(), both of which need ffmpeg support
 
@@ -75,12 +77,12 @@ def dense_flow(augs):
     try:
         videocapture=skvideo.io.vread(video_path)
     except:
-        print '{} read error! '.format(video_name)
+        print('{} read error! '.format(video_name))
         return 0
-    print video_name
+    print (video_name)
     # if extract nothing, exit!
     if videocapture.sum()==0:
-        print 'Could not initialize capturing',video_name
+        print('Could not initialize capturing',video_name)
         exit()
     len_frame=len(videocapture)
     frame_num=0
@@ -112,7 +114,7 @@ def dense_flow(augs):
         frame_0=prev_gray
         frame_1=gray
         ##default choose the tvl1 algorithm
-        dtvl1=cv2.createOptFlow_DualTVL1()
+        dtvl1=cv2.optflow.DualTVL1OpticalFlow_create()
         flowDTVL1=dtvl1.calc(frame_0,frame_1,None)
         save_flows(flowDTVL1,image,save_dir,frame_num,bound) #this is to save flows and img.
         prev_gray=gray
@@ -129,9 +131,9 @@ def dense_flow(augs):
 def get_video_list():
     video_list=[]
     for cls_names in os.listdir(videos_root):
-        cls_path=os.path.join(videos_root,cls_names)
+        cls_path=posixpath.join(videos_root,cls_names)
         for video_ in os.listdir(cls_path):
-            video_list.append(video_)
+            video_list.append(posixpath.join(cls_path,video_))
     video_list.sort()
     return video_list,len(video_list)
 
@@ -156,11 +158,13 @@ if __name__ =='__main__':
     # example: if the data path not setted from args,just manually set them as belows.
     #dataset='ucf101'
     #data_root='/S2/MI/zqj/video_classification/data'
-    #data_root=os.path.join(data_root,dataset)
-
+    #data_root=posixpath.join(data_root,dataset)
+    
+    
     args=parse_args()
-    data_root=os.path.join(args.data_root,args.dataset)
-    videos_root=os.path.join(data_root,'videos')
+    data_root = args.data_root
+    videos_root=posixpath.join(args.data_root,args.dataset)
+    # videos_root=posixpath.join(data_root,'videos')
 
     #specify the augments
     num_workers=args.num_workers
@@ -172,12 +176,12 @@ if __name__ =='__main__':
     mode=args.mode
     #get video list
     video_list,len_videos=get_video_list()
-    video_list=video_list[s_:e_]
+    # video_list=video_list[s_:e_]
 
-    len_videos=min(e_-s_,13320-s_) # if we choose the ucf101
-    print 'find {} videos.'.format(len_videos)
-    flows_dirs=[video.split('.')[0] for video in video_list]
-    print 'get videos list done! '
+    # len_videos=min(e_-s_,13320-s_) # if we choose the ucf101
+    print ('find {} videos.'.format(len_videos))
+    flows_dirs=[video.split('.mp4')[0] for video in video_list]
+    print ('get videos list done! ')
 
     pool=Pool(num_workers)
     if mode=='run':
